@@ -5,41 +5,39 @@ const path = require('path');
 const axios = require('axios');
 require('dotenv').config();
 
-// Token de acceso al bot de Telegram y Twitter Bearer Token
+// Telegram bot access token and Twitter Bearer Token
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TWITTER_BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN;
 
-// Crea el objeto bot
+// Create bot object
 const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
-// Directorio para guardar los videos temporalmente
+// Directory to temporarily save videos
 const TEMP_DIR = path.join(__dirname, 'temp');
 
-// Asegurarse de que el directorio temporal existe
+// Ensure the temporary directory exists
 fs.mkdir(TEMP_DIR, { recursive: true }).catch(console.error);
 
-// Manejador de mensajes con enlaces
+// Handler for messages with links
 bot.onText(/https?:\/\/(?:www\.)?twitter\.com\/\w+\/status\/(\d+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const tweetId = match[1];
   
   try {
-    await bot.sendMessage(chatId, 'Procesando el tweet...');
-
+    await bot.sendMessage(chatId, 'Processing the tweet...');
     const tweetData = await getTweetData(tweetId);
     const videoData = chooseVideoResolution(tweetData.extended_entities.media[0].video_info.variants);
     const videoUrl = videoData.url;
     
-    // Descarga el video
+    // Download the video
     const videoFilePath = path.join(TEMP_DIR, `video_${tweetId}.mp4`);
     await downloadFile(videoUrl, videoFilePath);
     
-    // Envía el video como respuesta
+    // Send the video as a response
     await bot.sendVideo(chatId, videoFilePath, {
-      caption: `Video descargado de Twitter.\nResolución: ${videoData.resolution || 'Desconocida'}\nBitrate: ${videoData.bitrate ? (videoData.bitrate / 1000000).toFixed(2) + ' Mbps' : 'Desconocido'}`
+      caption: `Video downloaded from Twitter.\nResolution: ${videoData.resolution || 'Unknown'}\nBitrate: ${videoData.bitrate ? (videoData.bitrate / 1000000).toFixed(2) + ' Mbps' : 'Unknown'}`
     });
-
-    // Elimina el archivo temporal
+    // Delete the temporary file
     await fs.unlink(videoFilePath);
   } catch (error) {
     console.error('Error:', error.message);
@@ -47,7 +45,7 @@ bot.onText(/https?:\/\/(?:www\.)?twitter\.com\/\w+\/status\/(\d+)/, async (msg, 
   }
 });
 
-// Función para obtener los datos de un tweet
+// Function to get tweet data
 async function getTweetData(tweetId) {
   try {
     const response = await axios.get(`https://api.twitter.com/1.1/statuses/show/${tweetId}.json`, {
@@ -57,17 +55,17 @@ async function getTweetData(tweetId) {
     });
     return response.data;
   } catch (error) {
-    throw new Error(`No se pudo obtener la información del tweet: ${error.message}`);
+    throw new Error(`Could not get tweet information: ${error.message}`);
   }
 }
 
-// Función para elegir la resolución del video
+// Function to choose video resolution
 function chooseVideoResolution(variants) {
   const mp4Variants = variants.filter(v => v.content_type === 'video/mp4' && v.bitrate);
   const sortedVariants = mp4Variants.sort((a, b) => b.bitrate - a.bitrate);
   const chosen = sortedVariants[0];
   
-  // Extraer la resolución del URL si está disponible
+  // Extract resolution from URL if available
   const resolutionMatch = chosen.url.match(/\/(\d+x\d+)\//);
   if (resolutionMatch) {
     chosen.resolution = resolutionMatch[1];
@@ -76,7 +74,7 @@ function chooseVideoResolution(variants) {
   return chosen;
 }
 
-// Función para descargar un archivo
+// Function to download a file
 async function downloadFile(url, filePath) {
   const writer = fs.createWriteStream(filePath);
   const response = await axios({
@@ -86,18 +84,18 @@ async function downloadFile(url, filePath) {
   });
   
   response.data.pipe(writer);
-
   return new Promise((resolve, reject) => {
     writer.on('finish', resolve);
     writer.on('error', reject);
   });
 }
 
-// Manejador de errores no capturados
+// Handler for uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
 
+// Handler for unhandled rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
